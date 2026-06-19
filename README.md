@@ -70,7 +70,7 @@ npm start       # Starts on http://localhost:3001
 
 | Decision | Rationale |
 |----------|-----------|
-| **Popup at checkout, not page load** | Ensures last-click cookie attribution. User is primed to buy. |
+| **Popup at checkout, not page load** | Surfaces the deal when the user is ready to buy. Higher conversion rate. |
 | **User clicks to redirect** | Legitimate click — passes affiliate ToS. Not cookie stuffing. |
 | **50% revenue share** | Best-in-class. Competitors give 1-5%. Drives organic growth. |
 | **SQLite (not Postgres)** | Single binary, zero-config for MVP. Easy to upgrade later. |
