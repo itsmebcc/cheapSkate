@@ -1,0 +1,16 @@
+# Dependencies
+server/node_modules/
+server/*.db
+server/*.db-shm
+server/*.db-wal
+
+# Build output
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
