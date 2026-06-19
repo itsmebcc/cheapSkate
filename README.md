@@ -32,6 +32,19 @@ cheapSkate/
 └── README.md
 ```
 
+## Website (Netlify)
+
+The marketing site lives in `site/` and is ready for Netlify:
+
+1. Push to GitHub → Netlify auto-deploys from `site/`
+2. Set custom domain: `cheapskate.gg`
+3. Netlify config is in `site/netlify.toml`
+
+Or deploy manually:
+```bash
+npx netlify deploy --dir=site --prod
+```
+
 ## Quick Start
 
 ### 1. Start the server
