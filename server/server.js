@@ -176,6 +176,176 @@ app.post("/withdraw", (req, res) => {
 });
 
 // ───────────────────────────────────────────────────────────
+// Admin Auth
+// ───────────────────────────────────────────────────────────
+
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "admin";
+
+function requireAdmin(req, res, next) {
+  const token = req.query.token || req.headers["x-admin-token"];
+  if (token !== ADMIN_TOKEN) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  next();
+}
+
+// ───────────────────────────────────────────────────────────
+// Admin API — Stats
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/admin/stats", requireAdmin, (req, res) => {
+  const db = getDb();
+  const users = db.prepare("SELECT COUNT(*) as c FROM users").get();
+  const conversions = db.prepare("SELECT COUNT(*) as c FROM conversions").get();
+  const totalRevenue = db.prepare("SELECT COALESCE(SUM(commission), 0) as total FROM conversions").get();
+  const totalPaid = db.prepare("SELECT COALESCE(SUM(user_share), 0) as total FROM conversions").get();
+  const offersCount = db.prepare("SELECT COUNT(*) as c FROM offers WHERE active=1").get();
+  const couponsCount = db.prepare("SELECT COUNT(*) as c FROM coupons WHERE active=1").get();
+  res.json({
+    users: users.c,
+    conversions: conversions.c,
+    totalCommission: totalRevenue.total,
+    totalPaidToUsers: totalPaid.total,
+    offers: offersCount.c,
+    coupons: couponsCount.c,
+  });
+});
+
+// ───────────────────────────────────────────────────────────
+// Admin API — Users list
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/admin/users", requireAdmin, (req, res) => {
+  const db = getDb();
+  const users = db.prepare(
+    "SELECT id, email, balance, conversions, created_at FROM users ORDER BY created_at DESC LIMIT 100"
+  ).all();
+  res.json(users);
+});
+
+// ───────────────────────────────────────────────────────────
+// Admin API — Conversions list
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/admin/conversions", requireAdmin, (req, res) => {
+  const db = getDb();
+  const convs = db.prepare(
+    "SELECT c.id, c.user_id, u.email, c.network, c.order_amount, c.commission, c.user_share, c.status, c.created_at FROM conversions c LEFT JOIN users u ON c.user_id = u.id ORDER BY c.created_at DESC LIMIT 100"
+  ).all();
+  res.json(convs);
+});
+
+// ───────────────────────────────────────────────────────────
+// Admin Dashboard (HTML)
+// ───────────────────────────────────────────────────────────
+
+app.get("/admin", (req, res) => {
+  const token = ADMIN_TOKEN;
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cheapSkate Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #f8f8f8; padding: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+    .header h1 { font-size: 24px; }
+    .header .token { font-size: 12px; color: #888; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+    .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; }
+    .card-value { font-size: 28px; font-weight: 700; color: #22c55e; margin-bottom: 4px; }
+    .card-label { font-size: 13px; color: #888; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th { text-align: left; padding: 10px 12px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #2a2a2a; }
+    td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #1a1a1a; }
+    .section-title { font-size: 16px; font-weight: 600; margin: 24px 0 12px; }
+    .badge { padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge-confirmed { background: #22c55e; color: #000; }
+    .badge-pending { background: #f59e0b; color: #000; }
+    .nav { display: flex; gap: 16px; margin-bottom: 24px; }
+    .nav a { color: #888; text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 8px; }
+    .nav a.active { color: #22c55e; background: #1a1a1a; }
+    .nav a:hover { color: #f8f8f8; }
+    @media (max-width: 768px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🏷️ cheapSkate Admin</h1>
+    <div class="token">Token: <code>${token}</code></div>
+  </div>
+
+  <div class="nav">
+    <a href="/admin" class="active">Dashboard</a>
+    <a href="/admin?view=users">Users</a>
+    <a href="/admin?view=conversions">Conversions</a>
+  </div>
+
+  <div id="stats-grid" class="grid">
+    <div class="card"><div class="card-value">—</div><div class="card-label">Users</div></div>
+    <div class="card"><div class="card-value">—</div><div class="card-label">Conversions</div></div>
+    <div class="card"><div class="card-value">—</div><div class="card-label">Total commission</div></div>
+    <div class="card"><div class="card-value">—</div><div class="card-label">Paid to users</div></div>
+    <div class="card"><div class="card-value">—</div><div class="card-label">Active offers</div></div>
+    <div class="card"><div class="card-value">—</div><div class="card-label">Active coupons</div></div>
+  </div>
+
+  <div id="table-container"></div>
+
+  <script>
+    const API_TOKEN = '${token}';
+    const view = new URLSearchParams(location.search).get('view') || 'dashboard';
+
+    async function loadStats() {
+      const res = await fetch('/api/admin/stats?token=' + API_TOKEN);
+      const d = await res.json();
+      const cards = document.querySelectorAll('.card');
+      cards[0].querySelector('.card-value').textContent = d.users;
+      cards[1].querySelector('.card-value').textContent = d.conversions;
+      cards[2].querySelector('.card-value').textContent = '$' + d.totalCommission.toFixed(2);
+      cards[3].querySelector('.card-value').textContent = '$' + d.totalPaidToUsers.toFixed(2);
+      cards[4].querySelector('.card-value').textContent = d.offers;
+      cards[5].querySelector('.card-value').textContent = d.coupons;
+    }
+
+    async function loadUsers() {
+      const res = await fetch('/api/admin/users?token=' + API_TOKEN);
+      const users = await res.json();
+      let html = '<div class="section-title">Users</div><table><thead><tr><th>Email</th><th>Balance</th><th>Conversions</th><th>Created</th></tr></thead><tbody>';
+      for (const u of users) {
+        html += '<tr><td>' + esc(u.email) + '</td><td>$' + u.balance.toFixed(2) + '</td><td>' + u.conversions + '</td><td>' + u.created_at + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      document.getElementById('table-container').innerHTML = html;
+    }
+
+    async function loadConversions() {
+      const res = await fetch('/api/admin/conversions?token=' + API_TOKEN);
+      const convs = await res.json();
+      let html = '<div class="section-title">Conversions</div><table><thead><tr><th>User</th><th>Network</th><th>Amount</th><th>Commission</th><th>User share</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+      for (const c of convs) {
+        const badgeClass = c.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
+        html += '<tr><td>' + esc(c.email || c.user_id) + '</td><td>' + esc(c.network) + '</td><td>$' + c.order_amount.toFixed(2) + '</td><td>$' + c.commission.toFixed(2) + '</td><td>$' + c.user_share.toFixed(2) + '</td><td><span class="badge ' + badgeClass + '">' + c.status + '</span></td><td>' + c.created_at + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      document.getElementById('table-container').innerHTML = html;
+    }
+
+    function esc(s) { return String(s).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>'); }
+
+    if (view === 'users') loadUsers();
+    else if (view === 'conversions') loadConversions();
+    else { loadStats(); document.getElementById('table-container').innerHTML = ''; }
+  </script>
+</body>
+</html>
+  `);
+});
+
+// ───────────────────────────────────────────────────────────
 // Start
 // ───────────────────────────────────────────────────────────
 
