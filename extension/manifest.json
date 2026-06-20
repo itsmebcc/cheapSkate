@@ -30,7 +30,38 @@
   "host_permissions": [
     "http://localhost:3001/*",
     "https://*.cheapskate.gg/*",
-    "https://*/*"
+    "https://*.amazon.com/*",
+    "https://*.ebay.com/*",
+    "https://*.walmart.com/*",
+    "https://*.target.com/*",
+    "https://*.nike.com/*",
+    "https://*.adidas.com/*",
+    "https://*.bestbuy.com/*",
+    "https://*.dell.com/*",
+    "https://*.apple.com/*",
+    "https://*.samsung.com/*",
+    "https://*.hp.com/*",
+    "https://*.lenovo.com/*",
+    "https://*.homedepot.com/*",
+    "https://*.lowes.com/*",
+    "https://*.wayfair.com/*",
+    "https://*.gap.com/*",
+    "https://*.oldnavy.com/*",
+    "https://*.macys.com/*",
+    "https://*.lululemon.com/*",
+    "https://*.booking.com/*",
+    "https://*.expedia.com/*",
+    "https://*.hotels.com/*",
+    "https://*.doordash.com/*",
+    "https://*.ubereats.com/*",
+    "https://*.hellofresh.com/*",
+    "https://*.sephora.com/*",
+    "https://*.nordvpn.com/*",
+    "https://*.skillshare.com/*",
+    "https://*.groupon.com/*",
+    "https://*.etsy.com/*",
+    "https://*.staples.com/*",
+    "https://*.zappos.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -39,6 +70,22 @@
   "content_scripts": [
     {
       "matches": ["https://*/*", "http://*/*"],
+      "exclude_matches": [
+        "https://*.google.com/*",
+        "https://*.facebook.com/*",
+        "https://*.reddit.com/*",
+        "https://*.youtube.com/*",
+        "https://*.twitter.com/*",
+        "https://*.x.com/*",
+        "https://*.instagram.com/*",
+        "https://*.tiktok.com/*",
+        "https://*.linkedin.com/*",
+        "https://*.github.com/*",
+        "https://*.stackoverflow.com/*",
+        "https://*.wikipedia.org/*",
+        "https://*.netflix.com/*",
+        "https://*.spotify.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

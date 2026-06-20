@@ -1,5 +1,14 @@
 // cheapSkate — Marketing Site JS
 // Waitlist signup, smooth scroll, animations
+//
+// For production, replace API_WAITLIST_URL with your Mailchimp/ConvertKit endpoint:
+// - Mailchimp: https://<dc>.api.mailchimp.com/3.0/lists/<list_id>/members
+// - ConvertKit:  https://api.convertkit.com/v3/forms/<form_id>/subscribe
+
+const API_WAITLIST_URL =
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:3001/api/waitlist"
+    : "https://api.cheapskate.gg/api/waitlist";
 
 document.addEventListener("DOMContentLoaded", () => {
   // ──────────────────────────────────────────────
@@ -18,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.disabled = true;
 
       try {
-        const res = await fetch("https://api.cheapskate.gg/api/waitlist", {
+        const res = await fetch(API_WAITLIST_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),

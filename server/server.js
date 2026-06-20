@@ -244,6 +244,25 @@ app.post("/api/offers", (req, res) => {
 });
 
 // ───────────────────────────────────────────────────────────
+// Waitlist — capture pre-launch emails
+// ───────────────────────────────────────────────────────────
+
+app.post("/api/waitlist", (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "email required" });
+
+  const db = getDb();
+  try {
+    db.prepare("INSERT INTO waitlist (email) VALUES (?)").run(email);
+    console.log(`[waitlist] ${email}`);
+    res.json({ ok: true });
+  } catch (err) {
+    // Duplicate — already on list
+    res.json({ ok: true, existing: true });
+  }
+});
+
+// ───────────────────────────────────────────────────────────
 // Withdrawal page (MVP)
 // ───────────────────────────────────────────────────────────
 
