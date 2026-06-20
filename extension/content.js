@@ -279,6 +279,32 @@ async function init() {
       autoApplyCoupon(window.location.hostname, state.lastCoupon.code);
     }
   });
+
+  // ── SPA navigation detection ──
+  // SPAs (Shopify, React checkouts) don't trigger full page loads.
+  // We re-detect on popstate (back/forward) and poll for URL changes.
+
+  let lastUrl = window.location.href;
+
+  window.addEventListener("popstate", () => {
+    const newUrl = window.location.href;
+    if (newUrl !== lastUrl) { lastUrl = newUrl; detectAndAct(); }
+  });
+
+  window.addEventListener("hashchange", () => {
+    const newUrl = window.location.href;
+    if (newUrl !== lastUrl) { lastUrl = newUrl; detectAndAct(); }
+  });
+
+  // Poll every 2 seconds for pushState-based navigation (most SPAs)
+  setInterval(() => {
+    const newUrl = window.location.href;
+    if (newUrl !== lastUrl) {
+      lastUrl = newUrl;
+      // Delay slightly to let SPA render the checkout DOM
+      setTimeout(() => detectAndAct(), 500);
+    }
+  }, 2000);
 }
 
 // ───────────────────────────────────────────────────────────

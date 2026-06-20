@@ -6,6 +6,9 @@ server/*.db-wal
 
 # Build output
 *.log
+dist/
+/manifest.json
+/manifest.firefox.json
 
 # OS files
 .DS_Store

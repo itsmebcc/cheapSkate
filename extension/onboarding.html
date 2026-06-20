@@ -19,6 +19,9 @@
     .cta button { background: #22c55e; color: #000; border: none; border-radius: 12px; padding: 14px 48px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
     .cta button:hover { background: #16a34a; }
     .cta .skip { display: block; margin-top: 12px; font-size: 13px; color: #666; cursor: pointer; text-decoration: underline; }
+    .changelog { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; margin: 24px 0; }
+    .changelog h3 { font-size: 16px; color: #22c55e; margin-bottom: 12px; }
+    .changelog li { font-size: 13px; color: #aaa; margin-bottom: 6px; }
     .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #555; }
     .permissions { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; margin: 24px 0; }
     .permissions h3 { font-size: 14px; color: #888; margin-bottom: 12px; }
@@ -30,6 +33,12 @@
     <div class="logo">🏷️</div>
     <h1>Welcome to cheapSkate</h1>
     <p class="subtitle">Cashback & coupons at checkout — you keep 50%</p>
+
+    <!-- Changelog (shown on extension update) -->
+    <div id="changelog-box" class="changelog hidden">
+      <h3>🆕 What's new</h3>
+      <ul id="changelog-items"></ul>
+    </div>
 
     <div class="step">
       <div class="step-num">1</div>
@@ -93,6 +102,20 @@
   </div>
 
   <script>
+    // Show changelog if ?update= parameter is present
+    const params = new URLSearchParams(location.search);
+    const updateText = params.get('update');
+    if (updateText) {
+      document.getElementById('changelog-box').classList.remove('hidden');
+      const items = updateText.split('•').filter(Boolean);
+      const list = document.getElementById('changelog-items');
+      items.forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = item.trim();
+        list.appendChild(li);
+      });
+    }
+
     document.getElementById('start-btn').onclick = () => {
       chrome.runtime.openMessage ? chrome.runtime.openMessage() : chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
     };

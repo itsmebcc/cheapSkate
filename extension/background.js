@@ -12,9 +12,18 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await syncOffers();
   chrome.alarms.create("syncOffers", { periodInMinutes: SYNC_INTERVAL_MINUTES });
 
-  // Open onboarding on first install (not on update)
   if (details.reason === "install") {
+    // Open onboarding on first install
     chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });
+  } else if (details.reason === "update") {
+    // Show changelog on update
+    const prevVersion = details.previousVersion;
+    const changelog = getChangelogSince(prevVersion);
+    if (changelog) {
+      chrome.tabs.create({
+        url: chrome.runtime.getURL("onboarding.html") + `?update=${encodeURIComponent(changelog)}`,
+      });
+    }
   }
 });
 
@@ -41,6 +50,34 @@ chrome.commands.onCommand.addListener((command) => {
 });
 
 // ───────────────────────────────────────────────────────────
+// Changelog for update notifications
+// ───────────────────────────────────────────────────────────
+
+function getChangelogSince(prevVersion) {
+  const versions = [
+    { v: "1.0.0", title: "🚀 Initial release", items: [
+      "Cashback popup at checkout",
+      "Coupon auto-application (63 codes across 32 stores)",
+      "User registration & balance tracking",
+      "Referral system (10% commission)",
+      "Fraud detection (payout holds, duplicate orders)",
+      "Keyboard shortcuts (Alt+Shift+C / Alt+Shift+S)",
+      "Admin dashboard with withdrawal approvals",
+      "Firefox support",
+      "Settings: toggle, cooldown, popup control",
+    ]},
+  ];
+
+  const entries = versions.filter((v) => v.v !== prevVersion && v.v !== "1.0.0");
+  // For now, just show the latest version's changelog
+  const latest = versions[versions.length - 1];
+  if (latest.v !== prevVersion) {
+    return `**${latest.title}**\\n${latest.items.map((i) => `• ${i}`).join("\\n")}`;
+  }
+  return null;
+}
+
+// ───────────────────────────────────────────────────────────
 // Offer Sync
 // ───────────────────────────────────────────────────────────
 
@@ -55,9 +92,18 @@ async function syncOffers() {
     const offers = await offersRes.json();
     const coupons = await couponsRes.json();
     await chrome.storage.local.set({ offers, coupons, lastSync: Date.now() });
+    // Reset retry counter on success
+    await chrome.storage.local.set({ syncRetryCount: 0 });
     console.log(`[cheapSkate] Synced ${offers.length} offers, ${coupons.length} coupons`);
   } catch (err) {
     console.warn("[cheapSkate] Sync failed:", err.message);
+    // Exponential backoff: 30s, 60s, 120s, 240s... up to 30 min
+    const data = await chrome.storage.local.get("syncRetryCount");
+    const retries = (data.syncRetryCount || 0) + 1;
+    const delay = Math.min(30000 * Math.pow(2, retries - 1), 1800000);
+    await chrome.storage.local.set({ syncRetryCount: retries });
+    console.log(`[cheapSkate] Retry ${retries} in ${Math.round(delay / 1000)}s`);
+    setTimeout(() => syncOffers(), delay);
   }
 }
 

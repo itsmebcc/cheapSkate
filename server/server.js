@@ -3,6 +3,8 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { getDb } from "./db.js";
 import { v4 as uuid } from "uuid";
 import { createHash, randomBytes } from "crypto";
@@ -10,8 +12,31 @@ import { createHash, randomBytes } from "crypto";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// ── Security headers ──
+app.use(helmet());
+
+// ── Rate limiting ──
+// Public endpoints: 60 requests/min per IP
+// Stricter for conversion/registration: 20 requests/min
+const publicLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
+const strictLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
+
+// ── CORS ──
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : ["http://localhost:3001", "http://localhost:5173", "https://cheapskate.gg", "https://*.cheapskate.netlify.app"];
+app.use(cors({ origin: allowedOrigins, credentials: true }));
+
 app.use(express.json());
+
+// ── Request logging ──
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms`);
+  });
+  next();
+});
 
 // ───────────────────────────────────────────────────────────
 // Health
@@ -425,6 +450,32 @@ app.post("/api/admin/approve-withdrawal", requireAdmin, (req, res) => {
   db.prepare("UPDATE users SET balance = 0 WHERE id = ?").run(userId);
   console.log(`[admin:withdrawal] ${userId}: $${user.balance.toFixed(2)} approved`);
   res.json({ ok: true, amount: user.balance });
+});
+
+// ───────────────────────────────────────────────────────────
+// Admin API — CSV Export
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/admin/export/users.csv", requireAdmin, (req, res) => {
+  const db = getDb();
+  const users = db.prepare("SELECT email, balance, conversions, created_at FROM users ORDER BY created_at DESC").all();
+  let csv = "email,balance,conversions,created_at\n";
+  csv += users.map((u) => `${u.email},${u.balance},${u.conversions},${u.created_at}`).join("\n");
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", "attachment; filename=users.csv");
+  res.send(csv);
+});
+
+app.get("/api/admin/export/conversions.csv", requireAdmin, (req, res) => {
+  const db = getDb();
+  const convs = db.prepare(
+    "SELECT c.id, u.email, c.network, c.order_amount, c.commission, c.user_share, c.status, c.created_at FROM conversions c LEFT JOIN users u ON c.user_id = u.id ORDER BY c.created_at DESC"
+  ).all();
+  let csv = "id,email,network,order_amount,commission,user_share,status,created_at\n";
+  csv += convs.map((c) => `${c.id},"${c.email || ""}",${c.network},${c.order_amount},${c.commission},${c.user_share},${c.status},${c.created_at}`).join("\n");
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", "attachment; filename=conversions.csv");
+  res.send(csv);
 });
 
 // ───────────────────────────────────────────────────────────

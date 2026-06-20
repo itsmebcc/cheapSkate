@@ -1,0 +1,5 @@
+# cheapSkate — robots.txt
+
+User-agent: *
+Allow: /
+Sitemap: https://cheapskate.gg/sitemap.xml
