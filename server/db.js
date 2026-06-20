@@ -53,6 +53,17 @@ function initTables() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS coupons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT,
+      domain TEXT NOT NULL,
+      code TEXT NOT NULL,
+      discount TEXT,
+      description TEXT,
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS conversions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id),

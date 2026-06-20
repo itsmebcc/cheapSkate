@@ -23,11 +23,16 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 async function syncOffers() {
   try {
-    const res = await fetch(`${API_BASE}/api/offers`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const offers = await res.json();
-    await chrome.storage.local.set({ offers, lastSync: Date.now() });
-    console.log(`[cheapSkate] Synced ${offers.length} offers`);
+    const [offersRes, couponsRes] = await Promise.all([
+      fetch(`${API_BASE}/api/offers`),
+      fetch(`${API_BASE}/api/coupons`),
+    ]);
+    if (!offersRes.ok) throw new Error(`Offers HTTP ${offersRes.status}`);
+    if (!couponsRes.ok) throw new Error(`Coupons HTTP ${couponsRes.status}`);
+    const offers = await offersRes.json();
+    const coupons = await couponsRes.json();
+    await chrome.storage.local.set({ offers, coupons, lastSync: Date.now() });
+    console.log(`[cheapSkate] Synced ${offers.length} offers, ${coupons.length} coupons`);
   } catch (err) {
     console.warn("[cheapSkate] Sync failed:", err.message);
   }
@@ -51,6 +56,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true; // keep channel open for async response
     case "GET_OFFERS_FOR_DOMAIN":
       getOffersForDomain(msg.domain).then(sendResponse);
+      return true;
+    case "GET_COUPONS_FOR_DOMAIN":
+      getCouponsForDomain(msg.domain).then(sendResponse);
       return true;
   }
 });
@@ -95,6 +103,12 @@ async function getOffersForDomain(domain) {
   const data = await chrome.storage.local.get("offers");
   const offers = data.offers || [];
   return offers.filter((o) => domain.includes(o.domain) || o.domain.includes(domain));
+}
+
+async function getCouponsForDomain(domain) {
+  const data = await chrome.storage.local.get("coupons");
+  const coupons = data.coupons || [];
+  return coupons.filter((c) => domain.includes(c.domain) || c.domain.includes(domain));
 }
 
 // ───────────────────────────────────────────────────────────

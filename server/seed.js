@@ -86,6 +86,30 @@ const OFFERS = [
     description: "Cashback on Skillshare subscriptions", commissionPct: 0.10, cookieWindow: 30 },
 ];
 
+const COUPONS = [
+  { domain: "amazon.com", code: "SAVE10", discount: "10% off", description: "Save 10% on select items" },
+  { domain: "amazon.com", code: "FREE5", discount: "$5 off", description: "Get $5 off orders over $25" },
+  { domain: "nike.com", code: "NIKEFLASH", discount: "20% off", description: "Flash sale: 20% off full-price items" },
+  { domain: "nike.com", code: "SAVE15", discount: "15% off", description: "15% off your order" },
+  { domain: "bestbuy.com", code: "SAVE10", discount: "10% off", description: "10% off select electronics" },
+  { domain: "bestbuy.com", code: "BB5OFF", discount: "$5 off", description: "$5 off orders over $50" },
+  { domain: "walmart.com", code: "WALMART5", discount: "$5 off", description: "$5 off your order" },
+  { domain: "walmart.com", code: "SAVE20", discount: "20% off", description: "20% off select items" },
+  { domain: "target.com", code: "TARGET10", discount: "10% off", description: "10% off your purchase" },
+  { domain: "target.com", code: "CIRCLE5", discount: "$5 off", description: "$5 off orders over $50" },
+  { domain: "ebay.com", code: "EBAY10", discount: "10% off", description: "10% off select items" },
+  { domain: "homedepot.com", code: "HD10", discount: "10% off", description: "10% off your order" },
+  { domain: "lowes.com", code: "LOWES5", discount: "$5 off", description: "$5 off orders over $50" },
+  { domain: "dell.com", code: "DELLSAVE", discount: "5% off", description: "5% off select computers" },
+  { domain: "doordash.com", code: "DASH15", discount: "$15 off", description: "$15 off first order" },
+  { domain: "doordash.com", code: "DASH10", discount: "10% off", description: "10% off your order" },
+  { domain: "ubereats.com", code: "UE10", discount: "$10 off", description: "$10 off first order" },
+  { domain: "booking.com", code: "BOOK5", discount: "5% off", description: "5% off your booking" },
+  { domain: "expedia.com", code: "EXP10", discount: "10% off", description: "10% off select hotels" },
+  { domain: "nordvpn.com", code: "NORD20", discount: "20% off", description: "20% off VPN subscription" },
+  { domain: "skillshare.com", code: "SKILL30", discount: "30 days free", description: "Free 30-day trial" },
+];
+
 async function seed() {
   const db = getDb();
 
@@ -100,7 +124,16 @@ async function seed() {
     stmt.run(o.network, o.merchantName, o.merchantId, o.domain, o.landingUrl, o.discount, o.description, o.commissionPct, o.cookieWindow);
   }
 
-  console.log(`[cheapSkate] Seeded ${OFFERS.length} offers`);
+  // Seed coupons
+  db.prepare("DELETE FROM coupons").run();
+  const couponStmt = db.prepare(
+    "INSERT INTO coupons (domain, code, discount, description) VALUES (?, ?, ?, ?)"
+  );
+  for (const c of COUPONS) {
+    couponStmt.run(c.domain, c.code, c.discount, c.description);
+  }
+
+  console.log(`[cheapSkate] Seeded ${OFFERS.length} offers, ${COUPONS.length} coupons`);
 }
 
 seed().catch(console.error);

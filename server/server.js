@@ -34,6 +34,18 @@ app.get("/api/offers", (req, res) => {
 });
 
 // ───────────────────────────────────────────────────────────
+// Coupon Sync (GET /api/coupons)
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/coupons", (req, res) => {
+  const db = getDb();
+  const coupons = db.prepare(
+    "SELECT id, domain, code, discount, description FROM coupons WHERE active = 1"
+  ).all();
+  res.json(coupons);
+});
+
+// ───────────────────────────────────────────────────────────
 // User Registration
 // ───────────────────────────────────────────────────────────
 
