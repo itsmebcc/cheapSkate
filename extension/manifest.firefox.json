@@ -3,6 +3,25 @@
   "name": "cheapSkate",
   "version": "1.0.0",
   "description": "Cashback & deals — get 50% of the affiliate commission when you shop through cheapSkate",
+  "commands": {
+    "_execute_action": {
+      "description": "Open cheapSkate popup"
+    },
+    "apply-offer": {
+      "description": "Apply current offer at checkout",
+      "suggested_key": {
+        "default": "Alt+Shift+C",
+        "mac": "MacCtrl+Shift+C"
+      }
+    },
+    "open-settings": {
+      "description": "Open cheapSkate settings",
+      "suggested_key": {
+        "default": "Alt+Shift+S",
+        "mac": "MacCtrl+Shift+S"
+      }
+    }
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "cheapskate@cheapskate.gg",

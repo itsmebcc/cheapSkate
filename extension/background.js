@@ -23,6 +23,24 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // ───────────────────────────────────────────────────────────
+// Keyboard commands
+// ───────────────────────────────────────────────────────────
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command === "apply-offer") {
+    // Find the active tab and send a message to the content script
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { type: "APPLY_OFFER" });
+      }
+    });
+  }
+  if (command === "open-settings") {
+    chrome.runtime.openOptionsPage?.() || chrome.tabs.create({ url: chrome.runtime.getURL("popup.html") });
+  }
+});
+
+// ───────────────────────────────────────────────────────────
 // Offer Sync
 // ───────────────────────────────────────────────────────────
 

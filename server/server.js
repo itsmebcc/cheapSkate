@@ -369,6 +369,46 @@ app.get("/api/admin/conversions", requireAdmin, (req, res) => {
 });
 
 // ───────────────────────────────────────────────────────────
+// Admin API — Pending withdrawals
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/admin/pending-withdrawals", requireAdmin, (req, res) => {
+  const db = getDb();
+  const pending = db.prepare(
+    "SELECT id, email, balance, conversions FROM users WHERE balance >= 5 ORDER BY balance DESC LIMIT 50"
+  ).all();
+  res.json(pending);
+});
+
+// ───────────────────────────────────────────────────────────
+// Admin API — Release payout hold on a conversion
+// ───────────────────────────────────────────────────────────
+
+app.post("/api/admin/release-hold", requireAdmin, (req, res) => {
+  const { conversionId } = req.body;
+  if (!conversionId) return res.status(400).json({ error: "conversionId required" });
+  const db = getDb();
+  db.prepare("UPDATE conversions SET status = 'confirmed', payout_hold_until = NULL WHERE id = ? AND payout_hold_until IS NOT NULL")
+    .run(conversionId);
+  res.json({ ok: true });
+});
+
+// ───────────────────────────────────────────────────────────
+// Admin API — Approve withdrawal (bypass fraud checks)
+// ───────────────────────────────────────────────────────────
+
+app.post("/api/admin/approve-withdrawal", requireAdmin, (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: "userId required" });
+  const db = getDb();
+  const user = db.prepare("SELECT balance FROM users WHERE id = ?").get(userId);
+  if (!user || user.balance < 5) return res.status(400).json({ error: "insufficient balance" });
+  db.prepare("UPDATE users SET balance = 0 WHERE id = ?").run(userId);
+  console.log(`[admin:withdrawal] ${userId}: $${user.balance.toFixed(2)} approved`);
+  res.json({ ok: true, amount: user.balance });
+});
+
+// ───────────────────────────────────────────────────────────
 // Admin Dashboard (HTML)
 // ───────────────────────────────────────────────────────────
 
@@ -415,6 +455,7 @@ app.get("/admin", (req, res) => {
     <a href="/admin" class="active">Dashboard</a>
     <a href="/admin?view=users">Users</a>
     <a href="/admin?view=conversions">Conversions</a>
+    <a href="/admin?view=withdrawals">Withdrawals</a>
   </div>
 
   <div id="stats-grid" class="grid">
@@ -473,8 +514,36 @@ app.get("/admin", (req, res) => {
 
     function esc(s) { return String(s).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>'); }
 
+    async function loadWithdrawals() {
+      const res = await fetch('/api/admin/pending-withdrawals?token=' + API_TOKEN);
+      const pending = await res.json();
+      let html = '<div class="section-title">Pending Withdrawals (balance ≥ $5)</div><table><thead><tr><th>Email</th><th>Balance</th><th>Conversions</th><th>Actions</th></tr></thead><tbody>';
+      for (const u of pending) {
+        const btnId = 'approve-' + u.id.slice(0, 8);
+        html += '<tr><td>' + esc(u.email) + '</td><td>$' + u.balance.toFixed(2) + '</td><td>' + u.conversions + '</td><td><button id="' + btnId + '" class="badge badge-confirmed" style="border:none;cursor:pointer;padding:6px 12px">Approve</button></td></tr>';
+      }
+      html += '</tbody></table>';
+      document.getElementById('table-container').innerHTML = html;
+
+      // Wire approve buttons
+      for (const u of pending) {
+        const btn = document.getElementById('approve-' + u.id.slice(0, 8));
+        if (btn) {
+          btn.onclick = async () => {
+            await fetch('/api/admin/approve-withdrawal?token=' + API_TOKEN, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: u.id }),
+            });
+            loadWithdrawals();
+          };
+        }
+      }
+    }
+
     if (view === 'users') loadUsers();
     else if (view === 'conversions') loadConversions();
+    else if (view === 'withdrawals') loadWithdrawals();
     else { loadStats(); document.getElementById('table-container').innerHTML = ''; }
   </script>
 </body>

@@ -66,18 +66,52 @@
       <p>We do not sell your personal data. The only third-party data sharing is with affiliate networks when reporting a conversion — they receive order confirmation details (order ID, amount, merchant) necessary to validate the commission. These affiliate networks have their own privacy policies.</p>
 
       <h2>6. Extension Permissions</h2>
-      <p>The cheapSkate browser extension requests the following permissions:</p>
+      <p>The cheapSkate browser extension requests the following permissions. Chrome Web Store requires us to explain each one:</p>
       <ul>
-        <li><strong>Storage</strong> — To cache offers and your user ID locally</li>
-        <li><strong>Tabs</strong> — To detect the current URL and check for offers</li>
-        <li><strong>Host permissions</strong> — To communicate with our API server and redirect through affiliate links</li>
+        <li><strong>Storage</strong> — Saves your user ID, preferences (enabled/disabled, cooldown period), and locally cached offers so the extension works offline. No browsing history or personal data is stored in extension storage beyond what's listed here.</li>
+        <li><strong>Alarms</strong> — Periodically refreshes the offer database in the background (every 30 minutes). No data is collected or transmitted beyond fetching updated offers from our API.</li>
+        <li><strong>Tabs</strong> — Detects the current URL to check for matching offers and coupons. Used only to determine which store you're on. We never read the content of your tabs.</li>
+        <li><strong>Host permissions</strong> — Communicates with our API server at <code>cheapskate.gg</code> to fetch offers and report conversions. Also redirects through affiliate links when you choose to apply an offer. We never modify or intercept your communications with other websites.</li>
       </ul>
-      <p>The extension does not read or modify the content of pages beyond detecting the current domain and displaying our popup overlay.</p>
+      <p>The extension processes visited domains <strong>locally</strong> in your browser — your browsing activity is not sent to our servers unless you choose to apply an offer and complete a purchase. The extension does not read passwords, payment details, messages, or any page content beyond detecting the current store domain.</p>
 
-      <h2>7. Changes to This Policy</h2>
-      <p>We will update this policy as the service evolves. Continued use of cheapSkate after changes constitutes acceptance of the updated policy.</p>
+      <h2>7. Data Retention</h2>
+      <p>We retain your data for as long as your account is active. Specifically:</p>
+      <ul>
+        <li><strong>Account data</strong> (email, user ID, referral code) — until you request deletion</li>
+        <li><strong>Conversion records</strong> — retained for payout reconciliation and fraud prevention (typically 12 months after last activity)</li>
+        <li><strong>Referral data</strong> — retained to calculate ongoing referral commissions</li>
+      </ul>
+      <p>You can request deletion at any time by emailing <a href="mailto:privacy@cheapskate.gg">privacy@cheapskate.gg</a>. We will delete your personal data within 30 days.</p>
 
-      <h2>8. Contact</h2>
+      <h2>8. Referral Data</h2>
+      <p>When you use a referral link to sign up, we record which user referred you. This is used to calculate referral commissions (10% of earnings). Referral data is not shared with third parties.</p>
+
+      <h2>9. Cookies on Our Website</h2>
+      <p>Our marketing site (<code>cheapskate.gg</code>) uses minimal cookies:</p>
+      <ul>
+        <li><strong>Waitlist cookie</strong> — Remembers that you joined the waitlist so we don't show the form again</li>
+        <li><strong>Analytics</strong> — We may use privacy-focused analytics (e.g., Plausible) that do not track individual users</li>
+      </ul>
+      <p>We do not use tracking cookies, advertising cookies, or third-party marketing cookies.</p>
+
+      <h2>10. Your Rights (GDPR / CCPA)</h2>
+      <p>If you are located in the EU or California, you have the following rights:</p>
+      <ul>
+        <li><strong>Right to access</strong> — Request a copy of the data we hold about you</li>
+        <li><strong>Right to deletion</strong> — Request erasure of your personal data</li>
+        <li><strong>Right to portability</strong> — Request your data in a machine-readable format</li>
+        <li><strong>Right to object</strong> — Object to specific processing activities</li>
+      </ul>
+      <p>To exercise any of these rights, email <a href="mailto:privacy@cheapskate.gg">privacy@cheapskate.gg</a>.</p>
+
+      <h2>11. Children's Privacy</h2>
+      <p>cheapSkate is not directed at children under 13. We do not knowingly collect data from children. If you believe a child has provided personal data, contact us and we will delete it.</p>
+
+      <h2>12. Changes to This Policy</h2>
+      <p>We will update this policy as the service evolves. Continued use of cheapSkate after changes constitutes acceptance of the updated policy. Material changes will be notified via email or extension update notes.</p>
+
+      <h2>13. Contact</h2>
       <p>Questions about this policy? Email us at <a href="mailto:privacy@cheapskate.gg">privacy@cheapskate.gg</a>.</p>
     </div>
   </section>

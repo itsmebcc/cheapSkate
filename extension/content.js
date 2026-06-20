@@ -272,6 +272,13 @@ async function init() {
 
   // Detect page type
   detectAndAct();
+
+  // Listen for keyboard-triggered commands from background
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "APPLY_OFFER" && state.lastOffer && state.lastCoupon) {
+      autoApplyCoupon(window.location.hostname, state.lastCoupon.code);
+    }
+  });
 }
 
 // ───────────────────────────────────────────────────────────
@@ -349,6 +356,9 @@ async function handleProductPage(domain) {
 // ───────────────────────────────────────────────────────────
 
 function showPopup(bestOffer, coupons, domain) {
+  // Store for keyboard shortcut reuse
+  state.lastOffer = bestOffer;
+  state.lastCoupon = coupons && coupons.length > 0 ? coupons[0] : null;
   // Mark shown with timestamp for cooldown tracking
   if (!state.shownDomains.lastShownTime) state.shownDomains.lastShownTime = {};
   state.shownDomains.lastShownTime[domain] = Date.now();
