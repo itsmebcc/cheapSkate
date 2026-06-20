@@ -8,9 +8,14 @@ const SYNC_INTERVAL_MINUTES = 30;
 // Init
 // ───────────────────────────────────────────────────────────
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   await syncOffers();
   chrome.alarms.create("syncOffers", { periodInMinutes: SYNC_INTERVAL_MINUTES });
+
+  // Open onboarding on first install (not on update)
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });
+  }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {

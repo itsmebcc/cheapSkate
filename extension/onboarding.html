@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to cheapSkate</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f0f; color: #f8f8f8; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 40px 24px; }
+    .logo { font-size: 48px; text-align: center; margin-bottom: 8px; }
+    h1 { font-size: 28px; font-weight: 700; text-align: center; color: #22c55e; margin-bottom: 8px; }
+    .subtitle { font-size: 15px; color: #888; text-align: center; margin-bottom: 32px; }
+    .step { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; margin-bottom: 16px; display: flex; gap: 16px; align-items: flex-start; }
+    .step-num { width: 32px; height: 32px; background: #22c55e; color: #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; flex-shrink: 0; }
+    .step-content h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .step-content p { font-size: 13px; color: #aaa; line-height: 1.5; }
+    .cta { text-align: center; margin-top: 32px; }
+    .cta button { background: #22c55e; color: #000; border: none; border-radius: 12px; padding: 14px 48px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+    .cta button:hover { background: #16a34a; }
+    .cta .skip { display: block; margin-top: 12px; font-size: 13px; color: #666; cursor: pointer; text-decoration: underline; }
+    .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #555; }
+    .permissions { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; margin: 24px 0; }
+    .permissions h3 { font-size: 14px; color: #888; margin-bottom: 12px; }
+    .permissions li { font-size: 13px; color: #aaa; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🏷️</div>
+    <h1>Welcome to cheapSkate</h1>
+    <p class="subtitle">Cashback & coupons at checkout — you keep 50%</p>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Create your account</h3>
+        <p>Enter your email to get a unique user ID. Your earnings are tracked and paid out to you.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Shop normally</h3>
+        <p>Visit any of 17+ supported stores — Amazon, Nike, Best Buy, Walmart, eBay, and more. cheapSkate quietly watches for deals in the background.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>At checkout, a popup appears</h3>
+        <p>cheapSkate finds coupon codes and cashback offers for the store you're shopping at. Click "Apply & Save" to activate everything.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h3>Coupon auto-applied</h3>
+        <p>The coupon code is automatically filled into the checkout form — no copying or pasting needed. You get the discount instantly.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <h3>Cashback tracked</h3>
+        <p>When your order converts, cheapSkate earns a small affiliate commission. You get 50% of it — paid out in crypto with no fees.</p>
+      </div>
+    </div>
+
+    <div class="permissions">
+      <h3>🔒 Permissions we use</h3>
+      <ul>
+        <li><strong>Storage</strong> — saves your account and preferences locally</li>
+        <li><strong>Alarms</strong> — refreshes offers in the background</li>
+        <li><strong>Tabs</strong> — opens your withdrawal page when requested</li>
+        <li><strong>Host access</strong> — fetches offers from our API server</li>
+      </ul>
+      <p style="font-size:12px;color:#666;margin-top:12px">We never read passwords, bank details, or personal messages.</p>
+    </div>
+
+    <div class="cta">
+      <button id="start-btn">Get started →</button>
+      <span class="skip" id="skip-btn">I'll sign up later</span>
+    </div>
+
+    <div class="footer">
+      cheapSkate v1.0.0 &middot; Open source on GitHub
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('start-btn').onclick = () => {
+      chrome.runtime.openMessage ? chrome.runtime.openMessage() : chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
+    };
+    document.getElementById('skip-btn').onclick = () => {
+      window.close();
+    };
+  </script>
+</body>
+</html>
