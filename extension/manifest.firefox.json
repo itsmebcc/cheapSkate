@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "cheapSkate",
+  "version": "1.0.0",
+  "description": "Cashback & deals — get 50% of the affiliate commission when you shop through cheapSkate",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cheapskate@cheapskate.gg",
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "https://*.cheapskate.gg/*",
+    "https://*/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "cheapSkate",
+    "default_icon": {
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+}

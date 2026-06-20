@@ -25,8 +25,18 @@ function initTables() {
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       token TEXT NOT NULL,
+      referral_code TEXT UNIQUE,
+      referred_by TEXT,
       balance REAL DEFAULT 0,
       conversions INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS referrals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      referrer_id TEXT NOT NULL REFERENCES users(id),
+      referred_id TEXT NOT NULL REFERENCES users(id),
+      commission_earned REAL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -67,13 +77,25 @@ function initTables() {
     CREATE TABLE IF NOT EXISTS conversions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id),
-      offer_id INTEGER REFERENCES offers(id),
-      network TEXT NOT NULL,
+      offer_id TEXT,
+      network TEXT,
       order_id TEXT,
-      order_amount REAL,
-      commission REAL,
-      user_share REAL,
+      order_amount REAL NOT NULL,
+      commission REAL DEFAULT 0,
+      user_share REAL DEFAULT 0,
       status TEXT DEFAULT 'pending',
+      payout_hold_until TEXT,
+      fraud_flag INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS fraud_checks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      order_id TEXT,
+      return_order_id TEXT,
+      flagged INTEGER DEFAULT 0,
+      reason TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);

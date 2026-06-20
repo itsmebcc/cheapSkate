@@ -133,6 +133,17 @@ async function seed() {
     couponStmt.run(c.domain, c.code, c.discount, c.description);
   }
 
+  // Seed referral code for test user
+  const testUser = db.prepare("SELECT id FROM users WHERE email = 'test@cheapskate.gg'").get();
+  if (testUser) {
+    const code = db.prepare("SELECT referral_code FROM users WHERE id = ?").get(testUser.id);
+    if (!code || !code.referral_code) {
+      const refCode = "cheapsk8";
+      db.prepare("UPDATE users SET referral_code = ? WHERE id = ?").run(refCode, testUser.id);
+      console.log(`[cheapSkate] Referral code set for test user: ${refCode}`);
+    }
+  }
+
   console.log(`[cheapSkate] Seeded ${OFFERS.length} offers, ${COUPONS.length} coupons`);
 }
 

@@ -17,6 +17,80 @@ const CHECKOUT_PATTERNS = [
   /\/(?:cart|basket|shopping-cart)/i,
 ];
 
+// Platform-specific DOM signals for checkout detection
+const CHECKOUT_DOM_SIGNALS = [
+  // Generic
+  '.checkout',
+  '#checkout',
+  '.checkout-page',
+  '.checkout-container',
+  // Shopify
+  '.cart__wrapper',
+  '.cart-container',
+  '.cart-content',
+  '.cart-header',
+  '#cart',
+  '.shopify-section--cart',
+  '.cart-form',
+  // WooCommerce
+  '.woocommerce-checkout',
+  '.woocommerce-cart-form',
+  '.woocommerce-checkout-review-order',
+  '.checkout.woocommerce',
+  '.woocommerce-order-received',
+  // Magento
+  '.checkout-cart',
+  '.checkout-payment',
+  '.checkout-method',
+  '.opc-progress-bar',
+  '.cart-summary',
+  // BigCommerce
+  '.checkout-content',
+  '.checkout-page-content',
+  '.cart-body',
+  '.cart-links',
+  // Salesforce Commerce
+  '.cart-page',
+  '.checkout-main',
+  '.order-summary',
+  '.payment-form',
+];
+
+// Product page signals — expanded
+const PRODUCT_PAGE_SIGNALS = [
+  // Generic add-to-cart
+  '.add-to-cart', '#add-to-cart', '[data-add-to-cart]',
+  '.add_to_cart', '#add_to_cart',
+  '.product-details', '.product-page',
+  '.buy-now', '#buy-now', '[data-buy-now]',
+  '.price', '.product-price',
+  // Platform-specific
+  '.product-title',
+  '.product-name',
+  '.product-info',
+  '.product-summary',
+  '.product-description',
+  // Shopify
+  '.product__info',
+  '.product__title',
+  '.product-form',
+  '.product-single',
+  // WooCommerce
+  '.product-summary',
+  '.single-product',
+  '.product-type-simple',
+  '.product-type-variable',
+  // Magento
+  '.product-view',
+  '.product-item-details',
+  // Price indicators (present on product pages, not cart)
+  '.price-wrapper',
+  '.price-value',
+  '.product-price',
+  '.sale-price',
+  '.regular-price',
+];
+
 // Coupon input field detection — covers Shopify, Magento, WooCommerce, BigCommerce, and generic
 const COUPON_SELECTORS = [
   'input[placeholder*="coupon" i]',
@@ -161,13 +235,6 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const PRODUCT_PAGE_SIGNALS = [
-  ".add-to-cart", "#add-to-cart", "[data-add-to-cart]",
-  ".product-details", ".product-page",
-  ".buy-now", "#buy-now", "[data-buy-now]",
-  ".price", ".product-price",
-];
-
 const COOLDOWN_PER_DOMAIN = 24 * 60 * 60 * 1000; // 24 hours
 
 // ───────────────────────────────────────────────────────────
@@ -179,6 +246,7 @@ let state = {
   offers: [],
   coupons: [],
   shownDomains: new Set(),
+  settings: {},
 };
 
 // ───────────────────────────────────────────────────────────
@@ -186,12 +254,13 @@ let state = {
 // ───────────────────────────────────────────────────────────
 
 async function init() {
-  // Load userId from storage
-  chrome.storage.local.get(["userId", "offers", "coupons", "shownDomains"], (data) => {
+  // Load userId and settings from storage
+  chrome.storage.local.get(["userId", "offers", "coupons", "shownDomains", "settings"], (data) => {
     state.userId = data.userId || null;
     state.offers = data.offers || [];
     state.coupons = data.coupons || [];
     state.shownDomains = new Set(data.shownDomains || []);
+    state.settings = data.settings || {};
   });
 
   // Listen for storage changes (background syncs offers here)
@@ -210,14 +279,24 @@ async function init() {
 // ───────────────────────────────────────────────────────────
 
 function detectAndAct() {
+  // Respect user settings
+  if (state.settings.enabled === false) return;
+
   const url = window.location.href;
   const domain = window.location.hostname;
   const path = window.location.pathname;
 
-  const isCheckout = CHECKOUT_PATTERNS.some((p) => p.test(path) || p.test(url));
+  // Check URL patterns first (fast, no DOM query)
+  const isCheckoutUrl = CHECKOUT_PATTERNS.some((p) => p.test(path) || p.test(url));
+
+  // Then check DOM signals (covers platforms with non-standard URLs)
+  const isCheckoutDom = CHECKOUT_DOM_SIGNALS.some((s) => document.querySelector(s));
   const isProduct = PRODUCT_PAGE_SIGNALS.some((s) => document.querySelector(s));
 
+  const isCheckout = isCheckoutUrl || isCheckoutDom;
+
   if (isCheckout) {
+    if (state.settings.showPopup === false) return;
     handleCheckoutPage(domain);
   } else if (isProduct) {
     handleProductPage(domain);
@@ -229,8 +308,11 @@ function detectAndAct() {
 // ───────────────────────────────────────────────────────────
 
 async function handleCheckoutPage(domain) {
-  // Don't spam if we already showed for this domain today
-  if (state.shownDomains.has(domain)) return;
+  // Respect cooldown setting (default 24h)
+  const cooldownHours = state.settings.cooldownHours || 24;
+  const cooldownMs = cooldownHours * 60 * 60 * 1000;
+  const lastShown = state.shownDomains.lastShownTime?.[domain];
+  if (lastShown && (Date.now() - lastShown) < cooldownMs) return;
 
   const offers = await getOffersForDomain(domain);
   const coupons = await getCouponsForDomain(domain);
@@ -267,9 +349,10 @@ async function handleProductPage(domain) {
 // ───────────────────────────────────────────────────────────
 
 function showPopup(bestOffer, coupons, domain) {
-  // Mark shown so we don't spam
-  state.shownDomains.add(domain);
-  chrome.storage.local.set({ shownDomains: [...state.shownDomains] });
+  // Mark shown with timestamp for cooldown tracking
+  if (!state.shownDomains.lastShownTime) state.shownDomains.lastShownTime = {};
+  state.shownDomains.lastShownTime[domain] = Date.now();
+  chrome.storage.local.set({ shownDomains: state.shownDomains });
 
   // Find the first coupon code for this domain
   const coupon = coupons && coupons.length > 0 ? coupons[0] : null;

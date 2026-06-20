@@ -50,22 +50,45 @@ app.get("/api/coupons", (req, res) => {
 // ───────────────────────────────────────────────────────────
 
 app.post("/api/register", (req, res) => {
-  const { email } = req.body;
+  const { email, referralCode } = req.body;
   if (!email) return res.status(400).json({ error: "email required" });
 
   const db = getDb();
-  const existing = db.prepare("SELECT id, token FROM users WHERE email = ?").get(email);
+  const existing = db.prepare("SELECT id, token, referral_code FROM users WHERE email = ?").get(email);
 
   if (existing) {
-    return res.json({ userId: existing.id, token: existing.token });
+    return res.json({ userId: existing.id, token: existing.token, referralCode: existing.referral_code });
+  }
+
+  // Generate a unique referral code
+  let referralCodeStr;
+  while (true) {
+    referralCodeStr = randomBytes(4).toString("hex").slice(0, 8);
+    const conflict = db.prepare("SELECT id FROM users WHERE referral_code = ?").get(referralCodeStr);
+    if (!conflict) break;
   }
 
   const userId = uuid();
   const token = randomBytes(32).toString("hex");
-  db.prepare("INSERT INTO users (id, email, token, balance, conversions) VALUES (?, ?, ?, 0, 0)")
-    .run(userId, email, token);
 
-  res.json({ userId, token });
+  // Find referrer if referral code provided
+  let referredBy = null;
+  if (referralCode) {
+    const referrer = db.prepare("SELECT id FROM users WHERE referral_code = ?").get(referralCode);
+    if (referrer) referredBy = referrer.id;
+  }
+
+  // Insert user FIRST so the referral FK works
+  db.prepare("INSERT INTO users (id, email, token, referral_code, referred_by, balance, conversions) VALUES (?, ?, ?, ?, ?, 0, 0)")
+    .run(userId, email, token, referralCodeStr, referredBy);
+
+  // Now create referral record (user exists in DB)
+  if (referredBy) {
+    db.prepare("INSERT INTO referrals (referrer_id, referred_id, commission_earned) VALUES (?, ?, 0)")
+      .run(referredBy, userId);
+  }
+
+  res.json({ userId, token, referralCode: referralCodeStr });
 });
 
 // ───────────────────────────────────────────────────────────
@@ -79,15 +102,78 @@ app.post("/api/conversion", (req, res) => {
   const db = getDb();
   const userShare = commission * 0.5;
 
+  // ── Fraud detection ──
+
+  let fraudFlag = 0;
+  let fraudReason = null;
+  let status = "confirmed";
+
+  // 1. Check if this orderId was already used (duplicate conversion)
+  if (orderId) {
+    const existing = db.prepare("SELECT id FROM conversions WHERE order_id = ? AND user_id = ?").get(orderId, userId);
+    if (existing) {
+      fraudFlag = 1;
+      fraudReason = "duplicate_order_id";
+      status = "flagged";
+    }
+  }
+
+  // 2. Return-rate check: count user's conversions vs flagged returns
+  if (!fraudFlag) {
+    const totalConvs = db.prepare("SELECT COUNT(*) as c FROM conversions WHERE user_id = ?").get(userId);
+    const flaggedCount = db.prepare("SELECT COUNT(*) as c FROM fraud_checks WHERE user_id = ? AND flagged = 1").get(userId);
+    const total = totalConvs.c + 1; // including this one
+    const flagged = flaggedCount.c;
+    if (total > 3 && (flagged / total) > 0.2) {
+      fraudFlag = 1;
+      fraudReason = "return_rate_exceeded";
+      status = "flagged";
+    }
+  }
+
+  // 3. Payout hold: 30-day hold on first conversion
+  let payoutHoldUntil = null;
+  if (!fraudFlag) {
+    const convCount = db.prepare("SELECT COUNT(*) as c FROM conversions WHERE user_id = ?").get(userId);
+    if (convCount.c === 0) {
+      // First conversion — hold for 30 days
+      payoutHoldUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      status = "pending";
+    } else if (convCount.c < 3) {
+      // Hold until 3 conversions
+      payoutHoldUntil = "requires_3_conversions";
+      status = "pending";
+    }
+  }
+
+  // Insert conversion with fraud info
   db.prepare(
-    "INSERT INTO conversions (user_id, offer_id, network, order_id, order_amount, commission, user_share, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')"
-  ).run(userId, offerId || null, network, orderId || null, orderAmount, commission, userShare);
+    "INSERT INTO conversions (user_id, offer_id, network, order_id, order_amount, commission, user_share, status, payout_hold_until, fraud_flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(userId, offerId || null, network, orderId || null, orderAmount, commission, userShare, status, payoutHoldUntil, fraudFlag);
 
-  // Update user balance
-  db.prepare("UPDATE users SET balance = balance + ?, conversions = conversions + 1 WHERE id = ?")
-    .run(userShare, userId);
+  // Only credit balance if not flagged
+  if (!fraudFlag) {
+    db.prepare("UPDATE users SET balance = balance + ?, conversions = conversions + 1 WHERE id = ?")
+      .run(userShare, userId);
 
-  res.json({ commission, userShare });
+    // Referral commission: 10% of user's share to the referrer
+    const user = db.prepare("SELECT referred_by FROM users WHERE id = ?").get(userId);
+    if (user && user.referred_by) {
+      const refCommission = userShare * 0.1;
+      db.prepare("UPDATE users SET balance = balance + ? WHERE id = ?")
+        .run(refCommission, user.referred_by);
+      db.prepare("UPDATE referrals SET commission_earned = commission_earned + ? WHERE referred_id = ?")
+        .run(refCommission, userId);
+    }
+  }
+
+  // Record fraud check
+  if (fraudFlag && orderId) {
+    db.prepare("INSERT INTO fraud_checks (user_id, order_id, flagged, reason) VALUES (?, ?, 1, ?)")
+      .run(userId, orderId, fraudReason);
+  }
+
+  res.json({ commission, userShare, status, fraudFlag, fraudReason });
 });
 
 // ───────────────────────────────────────────────────────────
@@ -99,6 +185,28 @@ app.get("/api/balance/:userId", (req, res) => {
   const user = db.prepare("SELECT balance, conversions FROM users WHERE id = ?").get(req.params.userId);
   if (!user) return res.status(404).json({ error: "user not found" });
   res.json(user);
+});
+
+// ───────────────────────────────────────────────────────────
+// Referral — get stats
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/referral/:userId", (req, res) => {
+  const db = getDb();
+  const user = db.prepare("SELECT referral_code, referred_by FROM users WHERE id = ?").get(req.params.userId);
+  if (!user) return res.status(404).json({ error: "user not found" });
+
+  // Count referrals and total commission earned
+  const stats = db.prepare(
+    "SELECT COUNT(*) as count, COALESCE(SUM(commission_earned), 0) as total FROM referrals WHERE referrer_id = ?"
+  ).get(req.params.userId);
+
+  res.json({
+    referralCode: user.referral_code,
+    referredBy: user.referred_by,
+    referrals: stats.count,
+    referralCommission: stats.total,
+  });
 });
 
 // ───────────────────────────────────────────────────────────
@@ -166,10 +274,31 @@ app.get("/withdraw", (req, res) => {
 app.post("/withdraw", (req, res) => {
   const { userId, address } = req.body;
   const db = getDb();
-  const user = db.prepare("SELECT balance FROM users WHERE id = ?").get(userId);
+  const user = db.prepare("SELECT balance, conversions FROM users WHERE id = ?").get(userId);
   if (!user || user.balance < 5) return res.status(400).send("Insufficient balance");
 
-  // For MVP: mark as paid, reset balance
+  // Fraud check: pending payout holds
+  const pendingHolds = db.prepare(
+    "SELECT COUNT(*) as c FROM conversions WHERE user_id = ? AND payout_hold_until IS NOT NULL AND status = 'pending'"
+  ).get(userId);
+  if (pendingHolds.c > 0) {
+    return res.status(403).send("Payout on hold — first conversion pending 30-day review.");
+  }
+
+  // Fraud check: flagged conversions
+  const flagged = db.prepare(
+    "SELECT COUNT(*) as c FROM conversions WHERE user_id = ? AND fraud_flag = 1"
+  ).get(userId);
+  if (flagged.c > 0) {
+    return res.status(403).send("Withdrawal blocked — suspicious activity flagged. Contact support.");
+  }
+
+  // Fraud check: minimum 3 conversions
+  if (user.conversions < 3) {
+    return res.status(403).send("Need at least 3 confirmed conversions before first withdrawal.");
+  }
+
+  // Mark as paid, reset balance
   db.prepare("UPDATE users SET balance = 0 WHERE id = ?").run(userId);
   console.log(`[withdrawal] ${userId} → ${address}: $${user.balance.toFixed(2)}`);
   res.send(`<html><body style="font-family:sans-serif;padding:40px;text-align:center"><h1>✅ Withdrawal submitted</h1><p>$${user.balance.toFixed(2)} sent to ${address}</p></body></html>`);
@@ -201,6 +330,8 @@ app.get("/api/admin/stats", requireAdmin, (req, res) => {
   const totalPaid = db.prepare("SELECT COALESCE(SUM(user_share), 0) as total FROM conversions").get();
   const offersCount = db.prepare("SELECT COUNT(*) as c FROM offers WHERE active=1").get();
   const couponsCount = db.prepare("SELECT COUNT(*) as c FROM coupons WHERE active=1").get();
+  const referralsCount = db.prepare("SELECT COUNT(*) as c FROM referrals").get();
+  const referralCommission = db.prepare("SELECT COALESCE(SUM(commission_earned), 0) as total FROM referrals").get();
   res.json({
     users: users.c,
     conversions: conversions.c,
@@ -208,6 +339,8 @@ app.get("/api/admin/stats", requireAdmin, (req, res) => {
     totalPaidToUsers: totalPaid.total,
     offers: offersCount.c,
     coupons: couponsCount.c,
+    referrals: referralsCount.c,
+    referralCommission: referralCommission.total,
   });
 });
 
@@ -291,6 +424,8 @@ app.get("/admin", (req, res) => {
     <div class="card"><div class="card-value">—</div><div class="card-label">Paid to users</div></div>
     <div class="card"><div class="card-value">—</div><div class="card-label">Active offers</div></div>
     <div class="card"><div class="card-value">—</div><div class="card-label">Active coupons</div></div>
+    <div class="card"><div class="card-value">—</div><div class="card-label">Referrals</div></div>
+    <div class="card"><div class="card-value">—</div><div class="card-label">Referral commission</div></div>
   </div>
 
   <div id="table-container"></div>
@@ -309,6 +444,8 @@ app.get("/admin", (req, res) => {
       cards[3].querySelector('.card-value').textContent = '$' + d.totalPaidToUsers.toFixed(2);
       cards[4].querySelector('.card-value').textContent = d.offers;
       cards[5].querySelector('.card-value').textContent = d.coupons;
+      cards[6].querySelector('.card-value').textContent = d.referrals;
+      cards[7].querySelector('.card-value').textContent = '$' + d.referralCommission.toFixed(2);
     }
 
     async function loadUsers() {
