@@ -270,6 +270,14 @@ async function seed() {
     couponStmt.run(c.domain, c.code, c.discount, c.description);
   }
 
+  // Seed Awin credentials for testing
+  const existingNet = db.prepare("SELECT id FROM affiliate_networks WHERE name = 'awin'").get();
+  if (!existingNet) {
+    db.prepare("INSERT INTO affiliate_networks (name, api_key, publisher_id, active) VALUES (?, ?, ?, 1)")
+      .run("awin", "8cd08e8b-1ca0-4867-9ebf-0ab8798209a5", "2942829");
+    console.log("[cheapSkate] Awin credentials seeded");
+  }
+
   console.log(`[cheapSkate] Seeded ${OFFERS.length} offers, ${COUPONS.length} coupons`);
 }
 

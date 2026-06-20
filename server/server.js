@@ -238,15 +238,28 @@ app.get("/api/referral/:userId", (req, res) => {
 // Redirect endpoint (/go/:network/:merchantId)
 // ───────────────────────────────────────────────────────────
 
-app.get("/go/:network/:merchantId", (req, res) => {
+app.get("/go/:network/:merchantId", async (req, res) => {
   const { network, merchantId } = req.params;
   const dest = req.query.dest || `https://${merchantId}`;
 
-  // For MVP: log the redirect, then forward
   console.log(`[redirect] ${network}/${merchantId} → ${dest} (ref: ${req.query.ref || "none"})`);
 
-  // In production: redirect through the affiliate network's deep-link
-  // For MVP: just redirect to the merchant
+  // ── Awin deep link via Link Builder API ──
+  if (network === "awin") {
+    const db = getDb();
+    const net = db.prepare("SELECT api_key, publisher_id FROM affiliate_networks WHERE name = 'awin' AND active = 1").get();
+    if (net && net.api_key && net.publisher_id) {
+      const { generateAwinLink } = await import("./awin-client.js");
+      const awinUrl = await generateAwinLink(net.publisher_id, net.api_key, {
+        advertiserId: parseInt(merchantId),
+        destinationUrl: decodeURIComponent(dest),
+        clickref: req.query.ref || null,
+      });
+      if (awinUrl) return res.redirect(302, awinUrl);
+    }
+  }
+
+  // Fallback: direct redirect
   res.redirect(302, decodeURIComponent(dest));
 });
 
@@ -479,6 +492,63 @@ app.get("/api/admin/export/conversions.csv", requireAdmin, (req, res) => {
 });
 
 // ───────────────────────────────────────────────────────────
+// Admin API — Awin Integration
+// ───────────────────────────────────────────────────────────
+
+app.get("/api/admin/affiliate-networks", requireAdmin, (req, res) => {
+  const db = getDb();
+  const networks = db.prepare("SELECT * FROM affiliate_networks").all();
+  res.json(networks);
+});
+
+app.post("/api/admin/affiliate-networks", requireAdmin, (req, res) => {
+  const { name, apiKey, publisherId } = req.body;
+  if (!name) return res.status(400).json({ error: "name required" });
+  const db = getDb();
+  db.prepare(
+    "INSERT OR REPLACE INTO affiliate_networks (name, api_key, publisher_id, active) VALUES (?, ?, ?, 1)"
+  ).run(name, apiKey || null, publisherId || null);
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/test-awin", requireAdmin, async (req, res) => {
+  const { apiKey, publisherId } = req.body;
+  if (!apiKey || !publisherId) return res.status(400).json({ error: "apiKey and publisherId required" });
+  try {
+    const { fetchAwinPrograms } = await import("./awin-client.js");
+    const programs = await fetchAwinPrograms(publisherId, apiKey);
+    res.json({ ok: true, programCount: Array.isArray(programs) ? programs.length : 0 });
+  } catch (err) {
+    res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/admin/sync-awin", requireAdmin, async (req, res) => {
+  const { apiKey, publisherId } = req.body;
+  if (!apiKey || !publisherId) return res.status(400).json({ error: "apiKey and publisherId required" });
+  try {
+    const { fetchAwinPrograms, mapAwinProgramToOffer } = await import("./awin-client.js");
+    const programs = await fetchAwinPrograms(publisherId, apiKey);
+    const offers = Array.isArray(programs) ? programs : (programs.data || programss || []);
+    const db = getDb();
+    let imported = 0;
+    for (const prog of (Array.isArray(programs) ? programs : (programs.data || []))) {
+      const offer = mapAwinProgramToOffer(prog, publisherId);
+      const existing = db.prepare("SELECT id FROM offers WHERE network_id = ? AND network = 'awin'").get(offer.network_id);
+      if (!existing) {
+        db.prepare(
+          "INSERT INTO offers (network, network_id, merchant_name, merchant_id, domain, landing_url, discount, description, commission_pct, cookie_window, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
+        ).run(offer.network, offer.network_id, offer.merchant_name, offer.merchant_id, offer.domain, offer.landing_url, offer.discount, offer.description, offer.commission_pct, offer.cookie_window);
+        imported++;
+      }
+    }
+    res.json({ ok: true, imported, total: Array.isArray(programs) ? programs.length : 0 });
+  } catch (err) {
+    res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
+// ───────────────────────────────────────────────────────────
 // Admin Dashboard (HTML)
 // ───────────────────────────────────────────────────────────
 
@@ -526,6 +596,7 @@ app.get("/admin", (req, res) => {
     <a href="/admin?view=users">Users</a>
     <a href="/admin?view=conversions">Conversions</a>
     <a href="/admin?view=withdrawals">Withdrawals</a>
+    <a href="/admin?view=awin">Awin</a>
   </div>
 
   <div id="stats-grid" class="grid">
@@ -611,9 +682,79 @@ app.get("/admin", (req, res) => {
       }
     }
 
+    async function loadAwin() {
+      const nets = await (await fetch('/api/admin/affiliate-networks?token=' + API_TOKEN)).json();
+      const awin = nets.find(n => n.name === 'awin') || {};
+      let html = '<div class="section-title">Awin Integration</div>';
+      html += '<div class="card" style="margin-bottom:16px">';
+      html += '<div class="card-label">Status</div>';
+      html += '<div class="card-value">' + (awin.api_key ? '✅ Configured' : '❌ Not configured') + '</div>';
+      html += '</div>';
+
+      // Config form
+      html += '<div class="card" style="margin-bottom:16px"><div class="card-label">Configure Awin API</div>';
+      html += '<p style="font-size:12px;color:#888;margin-bottom:12px">Enter your Awin Publisher ID and API Token.</p>';
+      html += '<input id="awin-publisher" value="' + esc(awin.publisher_id || '') + '" placeholder="Publisher ID" style="width:100%;padding:8px;margin-bottom:8px;border:1px solid #2a2a2a;border-radius:8px;background:#0f0f0f;color:#f8f8f8;font-size:14px">';
+      html += '<input id="awin-token" value="' + esc(awin.api_key || '') + '" placeholder="API Token" style="width:100%;padding:8px;margin-bottom:12px;border:1px solid #2a2a2a;border-radius:8px;background:#0f0f0f;color:#f8f8f8;font-size:14px">';
+      html += '<button id="awin-save-btn" class="badge badge-confirmed" style="border:none;cursor:pointer;padding:6px 12px;margin-right:8px">Save</button>';
+      html += '<button id="awin-test-btn" class="badge badge-pending" style="border:none;cursor:pointer;padding:6px 12px;margin-right:8px">Test connection</button>';
+      html += '<button id="awin-sync-btn" class="badge badge-confirmed" style="border:none;cursor:pointer;padding:6px 12px">Sync offers</button>';
+      html += '<div id="awin-result" style="margin-top:12px;font-size:13px;color:#888"></div>';
+      html += '</div>';
+
+      // Imported offers count
+      const stats = await (await fetch('/api/admin/stats?token=' + API_TOKEN)).json();
+      html += '<div class="card"><div class="card-label">Offers in DB</div>';
+      html += '<div class="card-value">' + stats.offers + '</div></div>';
+
+      document.getElementById('table-container').innerHTML = html;
+
+      document.getElementById('awin-save-btn').onclick = async () => {
+        const pub = document.getElementById('awin-publisher').value.trim();
+        const tok = document.getElementById('awin-token').value.trim();
+        await fetch('/api/admin/affiliate-networks?token=' + API_TOKEN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'awin', apiKey: tok, publisherId: pub }),
+        });
+        document.getElementById('awin-result').textContent = '✅ Saved';
+      };
+
+      document.getElementById('awin-test-btn').onclick = async () => {
+        const pub = document.getElementById('awin-publisher').value.trim();
+        const tok = document.getElementById('awin-token').value.trim();
+        document.getElementById('awin-result').textContent = 'Testing...';
+        const res = await fetch('/api/admin/test-awin?token=' + API_TOKEN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: tok, publisherId: pub }),
+        });
+        const data = await res.json();
+        document.getElementById('awin-result').textContent = data.ok
+          ? '✅ Connected — ' + data.programCount + ' programs found'
+          : '❌ ' + (data.error || 'Failed');
+      };
+
+      document.getElementById('awin-sync-btn').onclick = async () => {
+        const pub = document.getElementById('awin-publisher').value.trim();
+        const tok = document.getElementById('awin-token').value.trim();
+        document.getElementById('awin-result').textContent = 'Syncing...';
+        const res = await fetch('/api/admin/sync-awin?token=' + API_TOKEN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: tok, publisherId: pub }),
+        });
+        const data = await res.json();
+        document.getElementById('awin-result').textContent = data.ok
+          ? '✅ Imported ' + data.imported + ' / ' + data.total + ' programs'
+          : '❌ ' + (data.error || 'Failed');
+      };
+    }
+
     if (view === 'users') loadUsers();
     else if (view === 'conversions') loadConversions();
     else if (view === 'withdrawals') loadWithdrawals();
+    else if (view === 'awin') loadAwin();
     else { loadStats(); document.getElementById('table-container').innerHTML = ''; }
   </script>
 </body>

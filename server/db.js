@@ -50,6 +50,7 @@ function initTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
       api_key TEXT,
+      publisher_id TEXT,
       active INTEGER DEFAULT 1
     );
 
