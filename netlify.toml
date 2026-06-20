@@ -5,6 +5,17 @@
 [build.processing]
   skip_ssr = true
 
+# Custom domain
+[[redirects]]
+  from = "/go/*"
+  to = "http://localhost:3001/go/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/*"
+  to = "http://localhost:3001/api/:splat"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

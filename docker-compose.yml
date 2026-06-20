@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    container_name: cheapskate-api
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-admin}
+      - DB_PATH=/app/data/cheapskate.db
+    volumes:
+      - cheapskate-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  cheapskate-data:

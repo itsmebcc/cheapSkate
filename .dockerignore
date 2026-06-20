@@ -1,0 +1,9 @@
+node_modules
+.git
+*.db
+dist
+screenshots
+site
+extension
+README.md
+store-listing.md
